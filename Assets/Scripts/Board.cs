@@ -8,23 +8,24 @@ using System.Linq;
 
 public class Board : MonoBehaviour
 {
-    public float timeBetwenPieces =  0.01f;
+    public float timeBetwenPieces = 0.01f;
     public int width;
     public int height;
     public GameObject tileObject;
     public float cameraSizeOffset;
     public float cameraVerticalOffset;
-
+    public int PointsPerMatch=10;
     Tile[,] Tiles;
     Pieces[,] Pieces;
     Tile starTile;
     Tile endTile;
     public GameObject[] availablePieces;
-    bool swappingPieces= false;
+    bool swappingPieces = false;
+    List<Pieces.type>selectedPieceTypes;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        selectedPieceTypes = SelectRandomPieceTypes();
         Tiles = new Tile[width, height];
         Pieces = new Pieces[width, height];
         SetUpBoard();
@@ -32,7 +33,6 @@ public class Board : MonoBehaviour
         StartCoroutine(SetUpPieces());
     }
 
-    // Update is called once per frame
     void Update()
     {
         
@@ -65,22 +65,25 @@ public class Board : MonoBehaviour
 
     private IEnumerator SetUpPieces()
     {   
-        int maxIterations_= 50;
-        int currentIteration=0;
+        int maxIterations_ = 50;
+        int currentIteration = 0;
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {   
                 yield return new WaitForSeconds(timeBetwenPieces);
-                if(Pieces[x,y]== null){
-                currentIteration=0;
-                var newPice= CreatedpieceAt(x,y);
-                while(HasPreviousMatches(x,y)){
-                    ClearPieceAt(x,y);
-                    newPice = CreatedpieceAt(x,y);
-                    currentIteration++;
-                    if(currentIteration>= maxIterations_){
-                        break;
+                if (Pieces[x, y] == null)
+                {
+                    currentIteration = 0;
+                    var newPiece = CreatePieceAt(x, y);
+                    while (HasPreviousMatches(x, y))
+                    {
+                        ClearPieceAt(x, y);
+                        newPiece = CreatePieceAt(x, y);
+                        currentIteration++;
+                        if (currentIteration >= maxIterations_)
+                        {
+                            break;
                         }
                     }
                 }
@@ -91,158 +94,178 @@ public class Board : MonoBehaviour
 
     private void ClearPieceAt(int x, int y)
     {
-        var pieceToClear =  Pieces[x,y] ;
-        pieceToClear.Remove(true);
-        Pieces[x,y] = null;
+        var pieceToClear = Pieces[x, y];
+        if (pieceToClear != null)
+        {
+            pieceToClear.Remove(true);
+            Pieces[x, y] = null;
+        }
     }
 
-    private Pieces CreatedpieceAt(int x, int y){
-        var selectedPiece = availablePieces[UnityEngine.Random.Range(0, availablePieces.Length)];
-        var o = Instantiate(selectedPiece, new Vector3(x, y+1, -5), Quaternion.identity);
+    private Pieces CreatePieceAt(int x, int y)
+    {
+        var selectedPiece = availablePieces[UnityEngine.Random.Range(0, selectedPieceTypes.Count)];
+        var o = Instantiate(selectedPiece, new Vector3(x, y + 1, -5), Quaternion.identity);
         o.transform.parent = transform;
         Pieces[x, y] = o.GetComponent<Pieces>();
         Pieces[x, y]?.Setup(x, y, this);
         Pieces[x, y]?.Move(x, y);
-        return Pieces[x,y];
+        return Pieces[x, y];
     }
+
     public void TileDown(Tile tile_)
     {
-        if(!swappingPieces){
+        if (!swappingPieces && GameManager.Instance.gameState == GameManager.GameState.InGame)
+        {
             starTile = tile_;
         }
     }
 
     public void TileOver(Tile tile_)
     {
-        if(!swappingPieces){
+        if (!swappingPieces && GameManager.Instance.gameState == GameManager.GameState.InGame)
+        {
             endTile = tile_;
-            }
+        }
     }
 
     public void TileUp(Tile tile_)
     {
-        if(!swappingPieces){
+        if (!swappingPieces && GameManager.Instance.gameState == GameManager.GameState.InGame)
+        {
             if (starTile != null && endTile != null && IsCloseTo(starTile, endTile))
             {
                 StartCoroutine(SwapTiles());
             }
         }
     }
-    //Function for swap the gameObject 
+
     IEnumerator SwapTiles()
     {
-        swappingPieces= true;
+        swappingPieces = true;
         var StartPiece = Pieces[starTile.x, starTile.y];
         var EndPiece = Pieces[endTile.x, endTile.y];
 
-        StartPiece.Move(endTile.x, endTile.y);
-        EndPiece.Move(starTile.x, starTile.y);
+        StartPiece?.Move(endTile.x, endTile.y);
+        EndPiece?.Move(starTile.x, starTile.y);
 
         Pieces[starTile.x, starTile.y] = EndPiece;
         Pieces[endTile.x, endTile.y] = StartPiece;
         yield return new WaitForSeconds(0.6f);
-        var startMatches = GetMatchByPiece(starTile.x, starTile.y,3 );
-        var endMatches = GetMatchByPiece(endTile.x, endTile.y,3);
+        var startMatches = GetMatchByPiece(starTile.x, starTile.y, 3);
+        var endMatches = GetMatchByPiece(endTile.x, endTile.y, 3);
 
-        var allMatches = startMatches.Union(endMatches).ToList();
+        var allMatches = startMatches?.Union(endMatches)?.ToList() ?? new List<Pieces>();
 
-
-
-        if(allMatches.Count==0){
-            StartPiece.Move(starTile.x, starTile.y);
-            EndPiece.Move(endTile.x, endTile.y) ;
-            Pieces[starTile.x, starTile.y]= StartPiece;
-            Pieces[endTile.x, endTile.y]= EndPiece;
+        if (allMatches.Count == 0)
+        {
+            StartPiece?.Move(starTile.x, starTile.y);
+            EndPiece?.Move(endTile.x, endTile.y);
+            Pieces[starTile.x, starTile.y] = StartPiece;
+            Pieces[endTile.x, endTile.y] = EndPiece;
         }
-        else{
-            ClearPiece(allMatches);
+        else
+        {
+            ClearPieces(allMatches);
+            AwardPoints(allMatches);
         }
         starTile = null;
         endTile = null;
-        swappingPieces= false;
+        swappingPieces = false;
         yield return null;
     }
 
-    private void ClearPiece(List<Pieces> piecesToClear)
+    private void ClearPieces(List<Pieces> piecesToClear)
     {
-        piecesToClear.ForEach(piece=>{
-            ClearPieceAt(piece.x,piece.y);
+        piecesToClear.ForEach(piece => {
+            ClearPieceAt(piece.x, piece.y);
         });
-        List<int> colums = GetColums(piecesToClear);
-        List<Pieces>collapsePieces = collapseColums(colums, 0.3f);
-        FindMatchRecursively(collapsePieces);
+        List<int> columns = GetColumns(piecesToClear);
+        List<Pieces> collapsePieces = CollapseColumns(columns, 0.3f);
+        FindMatchesRecursively(collapsePieces);
     }
 
-    private void FindMatchRecursively(List<Pieces> collapsePieces)
+    private void FindMatchesRecursively(List<Pieces> collapsePieces)
     {
-        StartCoroutine(FindMatchRecursivelyCoroutine(collapsePieces));
+        StartCoroutine(FindMatchesRecursivelyCoroutine(collapsePieces));
     }
 
-    IEnumerator FindMatchRecursivelyCoroutine(List<Pieces> collapsePieces)
+    IEnumerator FindMatchesRecursivelyCoroutine(List<Pieces> collapsePieces)
     {
         yield return new WaitForSeconds(0.3f);
-        List <Pieces> newMatches = new List<Pieces>();
-        collapsePieces.ForEach(piece=>{
+        List<Pieces> newMatches = new List<Pieces>();
+        collapsePieces.ForEach(piece => {
             var matches = GetMatchByPiece(piece.x, piece.y);
-            if(matches != null){
+            if (matches != null)
+            {
                 newMatches = newMatches.Union(matches).ToList();
-                ClearPiece(matches);
+                ClearPieces(matches);
+                AwardPoints(matches);
             }
         });
-        if(newMatches.Count >0){
-            var newCollapsedPieces = collapseColums(GetColums(newMatches), 0.3f);
-            FindMatchRecursively(newCollapsedPieces);
+        if (newMatches.Count > 0)
+        {
+            var newCollapsedPieces = CollapseColumns(GetColumns(newMatches), 0.3f);
+            FindMatchesRecursively(newCollapsedPieces);
         }
-        else{
+        else
+        {
             yield return new WaitForSeconds(timeBetwenPieces);
             StartCoroutine(SetUpPieces());
-            swappingPieces=false;
+            swappingPieces = false;
         }
         yield return null;
     }
 
-    private List<Pieces> collapseColums(List<int> colums, float v)
+    private List<Pieces> CollapseColumns(List<int> columns, float delay)
     {
         List<Pieces> movingPieces = new List<Pieces>();
-        for (int i= 0; i< colums.Count; i++){
-                var column = colums[i];
-                for (int y=0;y< height; y++){
-                    if(Pieces[column, y]== null){
-                        for (int yplus =y+1; yplus< height; yplus++){
-                            if(Pieces[column, yplus] != null){
-                                Pieces[column, yplus].Move(column, y);
-                                Pieces[column, y]= Pieces[column, yplus];
-                                if(! movingPieces.Contains(Pieces[column, y])){
-                                    movingPieces.Add(Pieces[column,y]);
-                                }
-                                Pieces[column, yplus]=null;
-                                break;
+        for (int i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            for (int y = 0; y < height; y++)
+            {
+                if (Pieces[column, y] == null)
+                {
+                    for (int yPlus = y + 1; yPlus < height; yPlus++)
+                    {
+                        if (Pieces[column, yPlus] != null)
+                        {
+                            Pieces[column, yPlus].Move(column, y);
+                            Pieces[column, y] = Pieces[column, yPlus];
+                            if (!movingPieces.Contains(Pieces[column, y]))
+                            {
+                                movingPieces.Add(Pieces[column, y]);
                             }
+                            Pieces[column, yPlus] = null;
+                            break;
                         }
                     }
                 }
+            }
         }
         return movingPieces;
     }
 
-    private List<int> GetColums(List<Pieces> piecesToClear)
+    private List<int> GetColumns(List<Pieces> piecesToClear)
     {
         var result = new List<int>();
-        piecesToClear.ForEach(piece=>{
-                if(!result.Contains(piece.x)){
-                    result.Add(piece.x);
-                }
+        piecesToClear.ForEach(piece => {
+            if (!result.Contains(piece.x))
+            {
+                result.Add(piece.x);
+            }
         });
         return result;
     }
 
-    public bool IsCloseTo(Tile Start, Tile end)
+    public bool IsCloseTo(Tile start, Tile end)
     {
-        if (math.abs(Start.x - end.x) == 1 && Start.y == end.y)
+        if (math.abs(start.x - end.x) == 1 && start.y == end.y)
         {
             return true;
         }
-        if (math.abs(Start.y - end.y) == 1 && Start.x == end.x)
+        if (math.abs(start.y - end.y) == 1 && start.x == end.x)
         {
             return true;
         }
@@ -252,8 +275,8 @@ public class Board : MonoBehaviour
     public List<Pieces> GetMatchByDirection(int xpos, int ypos, UnityEngine.Vector2 direction, int minPieces = 3)
     {
         List<Pieces> matches = new List<Pieces>();
-        Pieces StartPiece = Pieces[xpos, ypos];
-        matches.Add(StartPiece);
+        Pieces startPiece = Pieces[xpos, ypos];
+        matches.Add(startPiece);
 
         int nextX;
         int nextY;
@@ -265,7 +288,7 @@ public class Board : MonoBehaviour
             if (nextX >= 0 && nextX < width && nextY >= 0 && nextY < height)
             {
                 var nextPiece = Pieces[nextX, nextY];
-                if (nextPiece != null && nextPiece.pieceType == StartPiece.pieceType)
+                if (nextPiece != null && nextPiece.pieceType == startPiece.pieceType)
                 {
                     matches.Add(nextPiece);
                 }
@@ -305,11 +328,24 @@ public class Board : MonoBehaviour
         }
         return foundMatches;
     }
-    bool HasPreviousMatches(int xpos, int ypos){
-        var downMatches = GetMatchByDirection(xpos, ypos, new UnityEngine.Vector2(0, -1), 2)?? new List<Pieces>();
+
+    bool HasPreviousMatches(int xpos, int ypos)
+    {
+        var downMatches = GetMatchByDirection(xpos, ypos, new UnityEngine.Vector2(0, -1), 2) ?? new List<Pieces>();
         var leftMatches = GetMatchByDirection(xpos, ypos, new UnityEngine.Vector2(-1, 0), 2) ?? new List<Pieces>();
         
-        return (downMatches.Count>0 || leftMatches.Count>0);
+        return (downMatches.Count > 0 || leftMatches.Count > 0);
     }
 
+    private List<Pieces.type> SelectRandomPieceTypes()
+        {
+            var allTypes = Enum.GetValues(typeof(Pieces.type)).Cast<Pieces.type>().ToList();
+            var selectedTypes = allTypes.OrderBy(x => UnityEngine.Random.value).Take(4).ToList();
+
+            return selectedTypes;
+        }
+
+        public void AwardPoints(List<Pieces> allMatches){
+            GameManager.Instance.AddPoints(allMatches.Count*PointsPerMatch);
+        }
 }
