@@ -5,6 +5,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using System.Collections;
 using System.Linq;
+using Unity.VisualScripting;
 
 public class Board : MonoBehaviour
 {
@@ -30,8 +31,24 @@ public class Board : MonoBehaviour
         Pieces = new Pieces[width, height];
         SetUpBoard();
         PositionCamera();
-        StartCoroutine(SetUpPieces());
+        if(GameManager.Instance.gameState== GameManager.GameState.InGame){
+            StartCoroutine(SetUpPieces());
+        }
+        GameManager.Instance.OnGameStateUpdated.AddListener(OnGameStateUpdated);
     }
+    private void OnDestroy(){
+        GameManager.Instance.OnGameStateUpdated.RemoveListener(OnGameStateUpdated);
+    }
+    private void OnGameStateUpdated(GameManager.GameState newState)
+    {
+        if(newState== GameManager.GameState.InGame ){
+            StartCoroutine(SetUpPieces());
+        }
+        if(newState== GameManager.GameState.GameOver ){
+           ClearAllPieces();
+        }
+    }
+
 
     void Update()
     {
@@ -113,6 +130,15 @@ public class Board : MonoBehaviour
         return Pieces[x, y];
     }
 
+    private void ClearAllPieces()
+    {
+        for(int x =0; x<width; x++){
+                for(int y =0; y<height; y++){
+                    ClearPieceAt(x,y);
+                }
+        };
+    }
+
     public void TileDown(Tile tile_)
     {
         if (!swappingPieces && GameManager.Instance.gameState == GameManager.GameState.InGame)
@@ -146,6 +172,9 @@ public class Board : MonoBehaviour
         var StartPiece = Pieces[starTile.x, starTile.y];
         var EndPiece = Pieces[endTile.x, endTile.y];
 
+        // Play the move sound
+
+        AudioManager.Instance.Move();
         StartPiece?.Move(endTile.x, endTile.y);
         EndPiece?.Move(starTile.x, starTile.y);
 
@@ -158,7 +187,8 @@ public class Board : MonoBehaviour
         var allMatches = startMatches?.Union(endMatches)?.ToList() ?? new List<Pieces>();
 
         if (allMatches.Count == 0)
-        {
+        {   
+            AudioManager.Instance.Miss();
             StartPiece?.Move(starTile.x, starTile.y);
             EndPiece?.Move(endTile.x, endTile.y);
             Pieces[starTile.x, starTile.y] = StartPiece;
