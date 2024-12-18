@@ -24,12 +24,12 @@ public class UiScreem : MonoBehaviour
 
     private void GameStateUpdated(GameManager.GameState newState)
     {
-       if(newState== visibleState){
-            ShowScreen();
-       }
-       else{
-            HideScreen();
-       }
+        if(newState== visibleState){
+                ShowScreen();
+        }
+        else{
+                HideScreen();
+        }
     }
 
     private void HideScreen()
